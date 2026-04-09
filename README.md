@@ -27,9 +27,5 @@ To run the project locally:
    ```
 2. Open `index.html` in your favorite web browser.
 
-## 📸 Screenshots
-
-*(Add screenshots here after uploading the project)*
-
 ---
 Built with ❤️ for the developer community.
