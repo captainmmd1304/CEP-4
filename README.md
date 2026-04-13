@@ -17,6 +17,16 @@
 - **Design**: Modern Dark Theme with Glassmorphism and vibrant gradients.
 - **Architecture**: Single Page Application (SPA) structure.
 
+## 📂 Project Structure
+
+```text
+.
+├── backend/          # Node.js Express API
+├── frontend/         # Frontend assets (HTML, CSS, JS)
+├── README.md         # Documentation
+└── .gitignore        # Git ignore rules
+```
+
 ## 📦 Getting Started
 
 To run the project locally:
@@ -25,7 +35,7 @@ To run the project locally:
    ```bash
    git clone <your-repo-url>
    ```
-2. Open `index.html` in your favorite web browser.
+2. Open `frontend/index.html` in your favorite web browser.
 
 ---
 Built with ❤️ for the developer community.

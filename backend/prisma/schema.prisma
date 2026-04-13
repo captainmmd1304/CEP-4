@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  email              String              @unique
+  passwordHash       String
+  initials           String
+  bio                String
+  experience         String
+  timezone           String
+  role               String
+  github             String
+  linkedin           String
+  openToTeam         Boolean             @default(true)
+  avatarColor        Int                 @default(0)
+  hackathonsAttended Int                 @default(0)
+  teamsFormed        Int                 @default(0)
+  projectsBuilt      Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  skills             UserSkill[]
+  hackathonLinks     HackathonAttendee[]
+  createdTeams       TeamPosting[]       @relation("TeamCreator")
+  teamMemberships    TeamMember[]
+  sentConversations  Conversation[]      @relation("ConversationFrom")
+  receivedConvos     Conversation[]      @relation("ConversationTo")
+  sentMessages       Message[]           @relation("MessageSender")
+  notifications      Notification[]      @relation("NotificationUser")
+  endorsementsGiven  Endorsement[]       @relation("EndorsementFrom")
+  endorsementsGot    Endorsement[]       @relation("EndorsementTo")
+  projectMemberships ProjectMember[]
+}
+
+model Skill {
+  id    Int        @id @default(autoincrement())
+  name  String     @unique
+  color String
+  users UserSkill[]
+}
+
+model UserSkill {
+  userId  Int
+  skillId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill   Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+}
+
+model Hackathon {
+  id             Int                 @id @default(autoincrement())
+  name           String
+  date           String
+  location       String
+  online         Boolean
+  prize          String
+  tags           Json
+  description    String
+  bannerGradient String
+  website        String
+  organizer      String
+  attendees      HackathonAttendee[]
+  teamPostings   TeamPosting[]
+}
+
+model HackathonAttendee {
+  hackathonId Int
+  userId      Int
+  hackathon   Hackathon @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([hackathonId, userId])
+}
+
+model TeamPosting {
+  id          Int            @id @default(autoincrement())
+  hackathonId Int
+  projectIdea String?
+  currentSize Int
+  maxSize     Int
+  creatorId   Int
+  createdAt   DateTime       @default(now())
+  hackathon   Hackathon      @relation(fields: [hackathonId], references: [id], onDelete: Cascade)
+  creator     User           @relation("TeamCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members     TeamMember[]
+  rolesNeeded TeamRoleNeeded[]
+}
+
+model TeamMember {
+  teamId  Int
+  userId  Int
+  team    TeamPosting @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+}
+
+model TeamRoleNeeded {
+  id     Int         @id @default(autoincrement())
+  teamId Int
+  role   String
+  team   TeamPosting @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id             Int       @id @default(autoincrement())
+  type           String
+  fromUserId     Int
+  toUserId       Int
+  requestMessage String?
+  requestStatus  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  from           User      @relation("ConversationFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  to             User      @relation("ConversationTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  messages       Message[]
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  senderId       Int
+  text           String
+  sentAt         DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model ShowcaseProject {
+  id             Int             @id @default(autoincrement())
+  name           String
+  hackathon      String
+  description    String
+  link           String
+  placement      String?
+  bannerGradient String
+  members        ProjectMember[]
+  techStack      ProjectTech[]
+}
+
+model ProjectMember {
+  projectId Int
+  userId    Int
+  project   ShowcaseProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+}
+
+model ProjectTech {
+  id        Int             @id @default(autoincrement())
+  projectId Int
+  tech      String
+  project   ShowcaseProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id       Int      @id @default(autoincrement())
+  type     String
+  text     String
+  timeLabel String
+  unread   Boolean  @default(true)
+  userId   Int?
+  user     User?    @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Endorsement {
+  id         Int    @id @default(autoincrement())
+  skill      String
+  comment    String
+  fromUserId Int
+  toUserId   Int
+  from       User   @relation("EndorsementFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  to         User   @relation("EndorsementTo", fields: [toUserId], references: [id], onDelete: Cascade)
+}

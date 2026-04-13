@@ -1,0 +1,21 @@
+{
+  "name": "cep(sem-4)",
+  "version": "1.0.0",
+  "description": "**Code Sathi** is a modern platform designed to help developers, designers, and innovators find their dream teammates for hackathons and collaborative projects.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/captainmmd1304/CEP-4.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/captainmmd1304/CEP-4/issues"
+  },
+  "homepage": "https://github.com/captainmmd1304/CEP-4#readme"
+}
