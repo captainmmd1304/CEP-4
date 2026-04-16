@@ -29,13 +29,40 @@
 
 ## 📦 Getting Started
 
-To run the project locally:
+To run the project locally, follow these steps:
 
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   ```
-2. Open `frontend/index.html` in your favorite web browser.
+### 1. Clone the repository
+```bash
+git clone https://github.com/captainmmd1304/CEP-4.git
+cd CEP-4
+```
+
+### 2. Backend Setup
+Navigate to the backend directory, install dependencies, and start the development server:
+
+```bash
+cd backend
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+# Check if you need to create a .env file with appropriate database credentials
+
+# Run database migrations and seed data
+npm run prisma:migrate
+npm run prisma:seed
+
+# Start the development server
+npm run dev
+```
+The backend server should now be running locally.
+
+### 3. Frontend Setup
+The frontend is built with vanilla web technologies, so no complex build process is required:
+1. Navigate to the `frontend/` directory.
+2. Open `index.html` directly in your favorite web browser.
+   - *Alternatively, use a local server like the "Live Server" extension in VS Code for a better development experience.*
 
 ---
 Built with ❤️ for the developer community.
