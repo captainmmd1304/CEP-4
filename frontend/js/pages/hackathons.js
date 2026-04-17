@@ -32,29 +32,31 @@ function renderHackathons() {
 }
 
 function renderHackathonCard(h, i = 0) {
-    const isGoing = h.attendees.includes(CURRENT_USER.id);
+    const attendeeIds = Array.isArray(h.attendeeIds) ? h.attendeeIds : (Array.isArray(h.attendees) ? h.attendees : []);
+    const attendeeCount = typeof h.attendeeCount === 'number' ? h.attendeeCount : attendeeIds.length;
+    const isGoing = typeof h.isGoing === 'boolean' ? h.isGoing : attendeeIds.includes(CURRENT_USER.id);
     return `
     <div class="hackathon-card animate-fade-in stagger-${(i % 8) + 1}" onclick="navigateTo('hackathon/${h.id}')">
-      <div style="height:6px;border-radius:4px 4px 0 0;margin:-24px -24px 20px;background:${h.bannerGradient}"></div>
+      <div style="height:6px;border-radius:4px 4px 0 0;margin:-24px -24px 20px;background:${escapeHtml(h.bannerGradient || 'linear-gradient(90deg,#00d4ff,#a855f7)')}"></div>
       <div class="hackathon-card-header">
         <div>
-          <h4 style="margin-bottom:4px">${h.name}</h4>
-          <span class="text-xs text-muted">${h.organizer}</span>
+          <h4 style="margin-bottom:4px">${escapeHtml(h.name)}</h4>
+          <span class="text-xs text-muted">${escapeHtml(h.organizer)}</span>
         </div>
         <span class="tag ${h.online ? 'tag-green' : 'tag-blue'}">${h.online ? '🌐 Online' : '📍 In-Person'}</span>
       </div>
       <div class="hackathon-card-meta">
-        <span>📅 ${h.date}</span>
-        <span>${h.online ? '' : '📍 ' + h.location}</span>
-        <span>💰 ${h.prize}</span>
+        <span>📅 ${escapeHtml(h.date)}</span>
+        <span>${h.online ? '' : `📍 ${escapeHtml(h.location)}`}</span>
+        <span>💰 ${escapeHtml(h.prize)}</span>
       </div>
       <div class="hackathon-card-tags">
-        ${h.tags.map(t => `<span class="tag tag-outline">${t}</span>`).join('')}
+        ${(Array.isArray(h.tags) ? h.tags : []).map((t) => `<span class="tag tag-outline">${escapeHtml(t)}</span>`).join('')}
       </div>
       <div class="hackathon-card-footer">
         <div style="display:flex;align-items:center;gap:8px">
-          ${renderAvatarStack(h.attendees, 3)}
-          <span class="text-xs text-muted">${h.attendees.length} interested</span>
+          ${renderAvatarStack(attendeeIds, 3)}
+          <span class="text-xs text-muted">${attendeeCount} interested</span>
         </div>
         <button class="btn ${isGoing ? 'btn-green btn-sm' : 'btn-outline btn-sm'}" onclick="event.stopPropagation(); toggleGoing(${h.id})">
           ${isGoing ? '✓ Going' : "I'm going"}
@@ -64,9 +66,28 @@ function renderHackathonCard(h, i = 0) {
 }
 
 let hackTagFilter = 'All';
+let hackathonsCache = [...HACKATHONS];
 
 function initHackathons() {
     hackTagFilter = 'All';
+    hackathonsCache = [...HACKATHONS];
+    loadHackathons();
+}
+
+async function loadHackathons() {
+    try {
+        const data = await apiRequest('/api/hackathons', {
+            auth: Boolean(getAuthToken()),
+            retries: 1,
+            timeoutMs: 8000,
+        });
+        if (Array.isArray(data.hackathons) && data.hackathons.length > 0) {
+            hackathonsCache = data.hackathons;
+            filterHackathons();
+        }
+    } catch {
+        showToast('Using local hackathon data.', 'info');
+    }
 }
 
 function filterHackTag(el) {
@@ -76,27 +97,46 @@ function filterHackTag(el) {
     filterHackathons();
 }
 
-function toggleGoing(hackId) {
-    const hack = HACKATHONS.find(h => h.id === hackId);
-    if (!hack) return;
-    const idx = hack.attendees.indexOf(CURRENT_USER.id);
-    if (idx >= 0) {
-        hack.attendees.splice(idx, 1);
-    } else {
-        hack.attendees.push(CURRENT_USER.id);
+async function toggleGoing(hackId) {
+    if (!getAuthToken()) {
+        showToast('Please sign in to mark attendance.', 'error');
+        navigateTo('login');
+        return;
     }
+
+    try {
+        const data = await apiRequest(`/api/hackathons/${hackId}/toggle-going`, {
+            method: 'POST',
+            auth: true,
+            retries: 1,
+            timeoutMs: 8000,
+        });
+
+        const idx = hackathonsCache.findIndex((h) => h.id === hackId);
+        if (idx >= 0) {
+            hackathonsCache[idx] = {
+                ...hackathonsCache[idx],
+                ...data.hackathon,
+            };
+        }
+        showToast('Attendance updated.', 'success');
+    } catch (err) {
+        showToast(err.message || 'Could not update attendance.', 'error');
+    }
+
     filterHackathons();
 }
 
 function filterHackathons() {
     const search = document.getElementById('hackSearch')?.value.toLowerCase() || '';
 
-    let filtered = HACKATHONS.filter(h => {
-        if (search && !h.name.toLowerCase().includes(search) && !h.tags.some(t => t.toLowerCase().includes(search))) return false;
+    let filtered = hackathonsCache.filter(h => {
+        const tags = Array.isArray(h.tags) ? h.tags : [];
+        if (search && !String(h.name || '').toLowerCase().includes(search) && !tags.some(t => String(t).toLowerCase().includes(search))) return false;
         if (hackTagFilter !== 'All') {
             if (hackTagFilter === 'Online') {
                 if (!h.online) return false;
-            } else if (!h.tags.includes(hackTagFilter)) return false;
+            } else if (!tags.includes(hackTagFilter)) return false;
         }
         return true;
     });

@@ -25,18 +25,19 @@ function renderShowcase() {
 }
 
 function renderProjectCard(project, i = 0) {
+  const safeLink = safeExternalUrl(project.link);
   return `
     <div class="project-card animate-fade-in stagger-${(i % 8) + 1}">
-      <div class="project-card-banner" style="background:${project.bannerGradient}">
-        ${project.placement ? `<div class="project-card-win">${project.placement}</div>` : ''}
+      <div class="project-card-banner" style="background:${escapeHtml(project.bannerGradient)}">
+        ${project.placement ? `<div class="project-card-win">${escapeHtml(project.placement)}</div>` : ''}
       </div>
       <div class="project-card-body">
-        <h4 style="margin-bottom:4px">${project.name}</h4>
-        <span class="text-xs text-muted" style="display:block;margin-bottom:12px">${project.hackathon}</span>
-        <p class="text-sm text-muted" style="margin-bottom:16px;line-height:1.6">${project.description}</p>
+        <h4 style="margin-bottom:4px">${escapeHtml(project.name)}</h4>
+        <span class="text-xs text-muted" style="display:block;margin-bottom:12px">${escapeHtml(project.hackathon)}</span>
+        <p class="text-sm text-muted" style="margin-bottom:16px;line-height:1.6">${escapeHtml(project.description)}</p>
         
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
-          ${project.techStack.map(t => `<span class="tag tag-outline" style="font-size:11px">${t}</span>`).join('')}
+          ${project.techStack.map(t => `<span class="tag tag-outline" style="font-size:11px">${escapeHtml(t)}</span>`).join('')}
         </div>
         
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -44,7 +45,9 @@ function renderProjectCard(project, i = 0) {
             ${renderAvatarStack(project.team.map(m => m.id), 3)}
             <span class="text-xs text-muted">${project.team.length} members</span>
           </div>
-          <a href="${project.link}" target="_blank" class="btn btn-outline btn-sm">View →</a>
+          ${safeLink
+            ? `<a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">View</a>`
+            : '<span class="text-xs text-muted">No link</span>'}
         </div>
       </div>
     </div>`;

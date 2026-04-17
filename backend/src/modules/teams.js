@@ -14,6 +14,8 @@ const createTeamSchema = z.object({
   maxSize: z.number().int().min(2).max(10),
 });
 
+const allowedRoles = new Set(['Builder', 'Designer', 'PM', 'Domain Expert']);
+
 function toTeamDto(team) {
   return {
     id: team.id,
@@ -51,6 +53,10 @@ router.get('/', asyncHandler(async (req, res) => {
 router.post('/', authRequired, asyncHandler(async (req, res) => {
   const body = createTeamSchema.parse(req.body);
   const creatorId = Number(req.auth.userId);
+
+  if (body.rolesNeeded.some((role) => !allowedRoles.has(role))) {
+    throw new AppError(400, 'Invalid role in rolesNeeded');
+  }
 
   const hackathon = await prisma.hackathon.findUnique({ where: { id: body.hackathonId } });
   if (!hackathon) throw new AppError(404, 'Hackathon not found');
@@ -91,6 +97,7 @@ router.post('/:id/join', authRequired, asyncHandler(async (req, res) => {
     },
   });
   if (!team) throw new AppError(404, 'Team not found');
+  if (team.creatorId === userId) throw new AppError(400, 'Creator is already part of the team');
   if (team.members.some((m) => m.userId === userId)) {
     throw new AppError(409, 'Already a team member');
   }

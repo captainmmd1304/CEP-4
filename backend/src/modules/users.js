@@ -2,7 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { AppError, asyncHandler } from '../lib/http.js';
-import { authRequired } from '../middleware/auth.js';
+import { authOptional, authRequired } from '../middleware/auth.js';
 import { toUserDto } from '../lib/serializers.js';
 
 const router = express.Router();
@@ -19,6 +19,9 @@ const updateMeSchema = z.object({
   avatarColor: z.number().int().min(0).max(7).optional(),
   skills: z.array(z.string()).optional(),
 });
+
+const allowedExperiences = new Set(['Beginner', 'Intermediate', 'Advanced']);
+const allowedRoles = new Set(['Builder', 'Designer', 'PM', 'Domain Expert']);
 
 router.get('/', asyncHandler(async (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
@@ -53,6 +56,19 @@ router.patch('/me', authRequired, asyncHandler(async (req, res) => {
   const body = updateMeSchema.parse(req.body);
   const userId = Number(req.auth.userId);
 
+  if (body.experience && !allowedExperiences.has(body.experience)) {
+    throw new AppError(400, 'Invalid experience value');
+  }
+  if (body.role && !allowedRoles.has(body.role)) {
+    throw new AppError(400, 'Invalid role value');
+  }
+  if (body.github && body.github.length > 300) {
+    throw new AppError(400, 'GitHub URL is too long');
+  }
+  if (body.linkedin && body.linkedin.length > 300) {
+    throw new AppError(400, 'LinkedIn URL is too long');
+  }
+
   const updateData = {
     ...(body.name !== undefined ? { name: body.name } : {}),
     ...(body.bio !== undefined ? { bio: body.bio } : {}),
@@ -82,10 +98,10 @@ router.patch('/me', authRequired, asyncHandler(async (req, res) => {
     include: { skills: { include: { skill: true } } },
   });
   if (!user) throw new AppError(404, 'User not found');
-  res.json({ user: toUserDto(user) });
+  res.json({ user: toUserDto(user, { includeEmail: true }) });
 }));
 
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', authOptional, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const user = await prisma.user.findUnique({
     where: { id },
@@ -116,8 +132,10 @@ router.get('/:id', asyncHandler(async (req, res) => {
     include: { techStack: true },
   });
 
+  const isSelf = Number(req.auth?.userId || 0) === id;
+
   res.json({
-    user: toUserDto(user),
+    user: toUserDto(user, { includeEmail: isSelf }),
     endorsements: user.endorsementsGot.map((e) => ({
       id: e.id,
       skill: e.skill,

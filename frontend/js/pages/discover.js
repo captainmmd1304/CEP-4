@@ -158,6 +158,9 @@ function filterDiscover() {
     if (resultsEl) {
         if (discoverViewMode === 'grid') {
             resultsEl.className = 'grid-3';
+            resultsEl.style.display = 'grid';
+            resultsEl.style.flexDirection = '';
+            resultsEl.style.gap = '';
             resultsEl.innerHTML = filtered.length > 0
                 ? filtered.map((u, i) => renderPersonCard(u, i)).join('')
                 : '<div style="grid-column:1/-1;text-align:center;padding:60px 0"><p class="text-muted">No hackers match your filters. Try adjusting your search.</p></div>';

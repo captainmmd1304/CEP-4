@@ -4,7 +4,12 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { swaggerSpec } from './docs/swagger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import authRouter from './modules/auth.js';
 import usersRouter from './modules/users.js';
@@ -18,8 +23,13 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 export function createApp() {
   const app = express();
 
-  // Security headers
-  app.use(helmet());
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'same-origin' },
+    referrerPolicy: { policy: 'no-referrer' },
+  }));
 
   // Logging
   app.use(morgan('dev'));
@@ -34,8 +44,13 @@ export function createApp() {
   });
   app.use('/api/', apiLimiter);
 
-  app.use(cors());
-  app.use(express.json());
+  app.use(cors({
+    origin: isProduction
+      ? (process.env.CORS_ORIGIN || '').split(',').map((item) => item.trim()).filter(Boolean)
+      : true,
+    credentials: true,
+  }));
+  app.use(express.json({ limit: '1mb' }));
 
   // Swagger Documentation Setup
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -44,22 +59,8 @@ export function createApp() {
     res.json({ ok: true, service: 'code-sathi-backend' });
   });
 
-  app.get('/', (req, res) => {
-    res.json({
-      message: 'Code Sathi Backend API',
-      status: 'Running',
-      endpoints: {
-        health: '/health',
-        auth: '/api/auth',
-        users: '/api/users',
-        hackathons: '/api/hackathons',
-        teams: '/api/teams',
-        messages: '/api/messages',
-        showcase: '/api/showcase',
-        notifications: '/api/notifications'
-      }
-    });
-  });
+  // Serve frontend files
+  app.use(express.static(path.join(__dirname, '../../frontend')));
 
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);

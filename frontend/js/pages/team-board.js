@@ -1,6 +1,7 @@
-// ===== TEAM BOARD =====
+let teamPostingsCache = [...TEAM_POSTINGS];
+
 function renderTeamBoard() {
-    return `
+  return `
     <div class="page">
       <div class="container">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;flex-wrap:wrap;gap:16px">
@@ -8,101 +9,192 @@ function renderTeamBoard() {
             <h2>Team Board</h2>
             <p class="text-muted" style="margin-top:4px">Find open teams or create your own posting</p>
           </div>
-          <button class="btn btn-primary" onclick="openTeamModal()">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Create Posting
-          </button>
+          <button class="btn btn-primary" type="button" onclick="openTeamModal()">Create Posting</button>
         </div>
 
-        <!-- Filter row -->
-        <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap" id="teamFilters">
-          <button class="tag tag-outline tag-selectable selected team-hack-filter" data-hack="All" onclick="filterTeams(this)">All Hackathons</button>
-          ${[...new Set(TEAM_POSTINGS.map(t => t.hackathonName))].map(h => `
-            <button class="tag tag-outline tag-selectable team-hack-filter" data-hack="${h}" onclick="filterTeams(this)">${h}</button>
-          `).join('')}
-        </div>
-
-        <div class="grid-2" id="teamGrid">
-          ${TEAM_POSTINGS.map(t => renderTeamCard(t)).join('')}
-        </div>
+        <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap" id="teamFilters"></div>
+        <div class="grid-2" id="teamGrid"></div>
       </div>
 
-      <!-- Create Team Modal -->
       <div class="modal-overlay" id="teamModal">
         <div class="modal">
           <div class="modal-header">
             <h3>Create Team Posting</h3>
-            <button class="modal-close" onclick="closeTeamModal()">✕</button>
+            <button class="modal-close" type="button" onclick="closeTeamModal()">✕</button>
           </div>
           <div class="form-group">
-            <label class="form-label">Hackathon</label>
-            <select id="teamHackathon">
-              ${HACKATHONS.map(h => `<option value="${h.id}">${h.name}</option>`).join('')}
-            </select>
+            <label class="form-label" for="teamHackathon">Hackathon</label>
+            <select id="teamHackathon">${HACKATHONS.map((h) => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('')}</select>
           </div>
           <div class="form-group">
-            <label class="form-label">Project Idea (optional)</label>
-            <textarea id="teamIdea" placeholder="Describe your project idea..." rows="3"></textarea>
+            <label class="form-label" for="teamIdea">Project Idea (optional)</label>
+            <textarea id="teamIdea" placeholder="Describe your project idea..." rows="3" maxlength="300"></textarea>
           </div>
           <div class="form-group">
             <label class="form-label">Roles Needed</label>
             <div style="display:flex;flex-wrap:wrap;gap:8px">
-              ${ROLES.map(r => `
-                <button class="tag tag-outline tag-selectable team-role-select" data-role="${r}" onclick="this.classList.toggle('selected')">${r}</button>
-              `).join('')}
+              ${ROLES.map((r) => `<button class="tag tag-outline tag-selectable team-role-select" type="button" data-role="${r}" onclick="this.classList.toggle('selected')">${escapeHtml(r)}</button>`).join('')}
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Max Team Size</label>
-            <select id="teamSize">
-              <option value="3">3</option>
-              <option value="4" selected>4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-            </select>
+            <label class="form-label" for="teamSize">Max Team Size</label>
+            <select id="teamSize"><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option></select>
           </div>
-          <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="submitTeamPosting()">
-            Post to Board
-          </button>
+          <button class="btn btn-primary" id="teamCreateBtn" style="width:100%;margin-top:8px" type="button" onclick="submitTeamPosting()">Post to Board</button>
         </div>
       </div>
     </div>`;
 }
 
-function initTeamBoard() { }
+function initTeamBoard() {
+  teamPostingsCache = [...TEAM_POSTINGS];
+  renderTeamFilters();
+  filterTeams('All');
+  loadTeams();
+}
 
-function filterTeams(el) {
-    document.querySelectorAll('.team-hack-filter').forEach(b => b.classList.remove('selected'));
-    el.classList.add('selected');
-    const hack = el.dataset.hack;
+function renderTeamBoardCard(team) {
+  return `
+    <div class="team-card animate-fade-in">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <span class="tag tag-purple">${escapeHtml(team.hackathonName || 'Hackathon')}</span>
+        <span class="text-xs text-muted">${team.currentSize}/${team.maxSize} members</span>
+      </div>
+      ${team.projectIdea
+        ? `<h4 style="margin-bottom:8px">${escapeHtml(team.projectIdea)}</h4>`
+        : '<h4 style="margin-bottom:8px;color:var(--text-muted);font-style:italic">Idea TBD - open to brainstorming</h4>'}
+      <div style="margin-bottom:12px">
+        <span class="text-xs text-muted" style="display:block;margin-bottom:6px">ROLES NEEDED</span>
+        <div class="team-card-roles">
+          ${(team.rolesNeeded || []).map((r) => `<span class="tag tag-blue">${escapeHtml(r)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="progress-bar" style="margin-bottom:16px"><div class="progress-bar-fill" style="width:${Math.min(100, (team.currentSize / team.maxSize) * 100)}%"></div></div>
+      <div style="display:flex;align-items:center;justify-content:flex-end">
+        <button class="btn btn-primary btn-sm" type="button" onclick="joinTeam(${team.id})">Join</button>
+      </div>
+    </div>`;
+}
 
-    const filtered = hack === 'All' ? TEAM_POSTINGS : TEAM_POSTINGS.filter(t => t.hackathonName === hack);
-    const grid = document.getElementById('teamGrid');
-    if (grid) {
-        grid.innerHTML = filtered.length > 0
-            ? filtered.map(t => renderTeamCard(t)).join('')
-            : '<div style="grid-column:1/-1;text-align:center;padding:40px"><p class="text-muted">No open teams for this hackathon.</p></div>';
-    }
+function renderTeamFilters() {
+  const wrap = document.getElementById('teamFilters');
+  if (!wrap) return;
+
+  const names = ['All', ...new Set(teamPostingsCache.map((t) => t.hackathonName).filter(Boolean))];
+  wrap.innerHTML = names.map((name, index) => `
+    <button class="tag tag-outline tag-selectable team-hack-filter ${index === 0 ? 'selected' : ''}" type="button" data-hack="${escapeHtml(name)}" onclick="filterTeamsByIndex(${index})">
+      ${escapeHtml(name === 'All' ? 'All Hackathons' : name)}
+    </button>`).join('');
+}
+
+function filterTeamsByIndex(index) {
+  const names = ['All', ...new Set(teamPostingsCache.map((t) => t.hackathonName).filter(Boolean))];
+  filterTeams(names[index] || 'All');
+}
+
+function filterTeams(hackName) {
+  const selected = hackName || 'All';
+  document.querySelectorAll('.team-hack-filter').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.hack === selected);
+  });
+
+  const filtered = selected === 'All' ? teamPostingsCache : teamPostingsCache.filter((t) => t.hackathonName === selected);
+  const grid = document.getElementById('teamGrid');
+  if (!grid) return;
+
+  grid.innerHTML = filtered.length > 0
+    ? filtered.map((team) => renderTeamBoardCard(team)).join('')
+    : '<div style="grid-column:1/-1;text-align:center;padding:40px"><p class="text-muted">No open teams for this hackathon.</p></div>';
 }
 
 function openTeamModal() {
-    document.getElementById('teamModal').classList.add('active');
+  if (!getAuthToken()) {
+    showToast('Please sign in to create a team posting.', 'error');
+    navigateTo('login');
+    return;
+  }
+
+  document.getElementById('teamModal')?.classList.add('active');
 }
 
 function closeTeamModal() {
-    document.getElementById('teamModal').classList.remove('active');
+  document.getElementById('teamModal')?.classList.remove('active');
 }
 
-function submitTeamPosting() {
+async function submitTeamPosting() {
+  const hackathonId = Number(document.getElementById('teamHackathon')?.value || 0);
+  const projectIdea = document.getElementById('teamIdea')?.value?.trim() || '';
+  const maxSize = Number(document.getElementById('teamSize')?.value || 4);
+  const rolesNeeded = [...document.querySelectorAll('.team-role-select.selected')].map((el) => el.dataset.role);
+  const btn = document.getElementById('teamCreateBtn');
+
+  if (!hackathonId || rolesNeeded.length === 0) {
+    showToast('Choose a hackathon and at least one role.', 'error');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Posting...';
+  }
+
+  try {
+    const data = await apiRequest('/api/teams', {
+      method: 'POST',
+      auth: true,
+      body: { hackathonId, projectIdea: projectIdea || null, rolesNeeded, maxSize },
+      timeoutMs: 10000,
+    });
+
+    teamPostingsCache = [data.team, ...teamPostingsCache];
+    renderTeamFilters();
+    filterTeams('All');
     closeTeamModal();
-    // Visual feedback: re-render with success feel
-    const grid = document.getElementById('teamGrid');
-    if (grid) {
-        const successMsg = document.createElement('div');
-        successMsg.className = 'card animate-fade-in';
-        successMsg.style.cssText = 'grid-column:1/-1;text-align:center;padding:20px;border-color:var(--accent-green);background:rgba(0,255,136,0.05)';
-        successMsg.innerHTML = '<p style="color:var(--accent-green);font-weight:600">✓ Team posting created successfully!</p>';
-        grid.prepend(successMsg);
-        setTimeout(() => successMsg.remove(), 3000);
+    showToast('Team posting created.', 'success');
+  } catch (err) {
+    showToast(err.message || 'Could not create posting.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Post to Board';
     }
+  }
+}
+
+async function joinTeam(teamId) {
+  if (!getAuthToken()) {
+    showToast('Please sign in to join a team.', 'error');
+    navigateTo('login');
+    return;
+  }
+
+  try {
+    const data = await apiRequest(`/api/teams/${teamId}/join`, {
+      method: 'POST',
+      auth: true,
+      timeoutMs: 10000,
+    });
+
+    teamPostingsCache = teamPostingsCache.map((team) => (team.id === teamId ? data.team : team));
+    filterTeams(document.querySelector('.team-hack-filter.selected')?.dataset.hack || 'All');
+    showToast('You joined the team.', 'success');
+  } catch (err) {
+    showToast(err.message || 'Could not join this team.', 'error');
+  }
+}
+
+async function loadTeams() {
+  try {
+    const data = await apiRequest('/api/teams', {
+      retries: 1,
+      timeoutMs: 10000,
+    });
+    if (Array.isArray(data.teams)) {
+      teamPostingsCache = data.teams;
+      renderTeamFilters();
+      filterTeams('All');
+    }
+  } catch {
+    showToast('Using local team listings.', 'info');
+  }
 }

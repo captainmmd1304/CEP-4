@@ -6,7 +6,11 @@ import { authRequired } from '../middleware/auth.js';
 const router = express.Router();
 
 router.get('/', authRequired, asyncHandler(async (req, res) => {
+  const userId = Number(req.auth.userId);
   const notifications = await prisma.notification.findMany({
+    where: {
+      OR: [{ userId }, { userId: null }],
+    },
     orderBy: { id: 'asc' },
   });
 
@@ -25,8 +29,12 @@ router.get('/', authRequired, asyncHandler(async (req, res) => {
 
 router.post('/:id/read', authRequired, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
+  const userId = Number(req.auth.userId);
   const existing = await prisma.notification.findUnique({ where: { id } });
   if (!existing) throw new AppError(404, 'Notification not found');
+  if (existing.userId !== null && existing.userId !== userId) {
+    throw new AppError(403, 'Not allowed to update this notification');
+  }
 
   const notification = await prisma.notification.update({
     where: { id },

@@ -58,7 +58,7 @@ router.post('/register', asyncHandler(async (req, res) => {
   });
 
   const token = signToken(user);
-  res.status(201).json({ token, user: toUserDto(user) });
+  res.status(201).json({ token, user: toUserDto(user, { includeEmail: true }) });
 }));
 
 router.post('/login', asyncHandler(async (req, res) => {
@@ -74,7 +74,7 @@ router.post('/login', asyncHandler(async (req, res) => {
   if (!ok) throw new AppError(401, 'Invalid email or password');
 
   const token = signToken(user);
-  res.json({ token, user: toUserDto(user) });
+  res.json({ token, user: toUserDto(user, { includeEmail: true }) });
 }));
 
 router.get('/me', authRequired, asyncHandler(async (req, res) => {
@@ -83,7 +83,7 @@ router.get('/me', authRequired, asyncHandler(async (req, res) => {
     include: { skills: { include: { skill: true } } },
   });
   if (!user) throw new AppError(404, 'User not found');
-  res.json({ user: toUserDto(user) });
+  res.json({ user: toUserDto(user, { includeEmail: true }) });
 }));
 
 export default router;

@@ -1,9 +1,244 @@
 // ===== HACKTEAM SPA ROUTER & UTILITIES =====
 
+const APP_ROUTES = new Set([
+    'home',
+    'login',
+    'onboarding',
+    'discover',
+    'hackathons',
+    'hackathon',
+    'teams',
+    'profile',
+    'messages',
+    'showcase',
+]);
+
+let authFailureNotified = false;
+
+const AUTH_STORAGE_KEYS = {
+    token: 'code_sathi_token',
+    userId: 'code_sathi_userId',
+    userName: 'code_sathi_userName',
+};
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function safeExternalUrl(rawUrl) {
+    const value = String(rawUrl ?? '').trim();
+    if (!value) return '';
+
+    const normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    try {
+        const parsed = new URL(normalized);
+        return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : '';
+    } catch {
+        return '';
+    }
+}
+
+function getAuthToken() {
+    return localStorage.getItem(AUTH_STORAGE_KEYS.token) || '';
+}
+
+function getCurrentUserId() {
+    return Number(localStorage.getItem(AUTH_STORAGE_KEYS.userId)) || null;
+}
+
+function getAuthUserName() {
+    return localStorage.getItem(AUTH_STORAGE_KEYS.userName) || '';
+}
+
+function isAuthenticated() {
+    return Boolean(getAuthToken() && getCurrentUserId());
+}
+
+function clearAuthSession() {
+    localStorage.removeItem(AUTH_STORAGE_KEYS.token);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.userId);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.userName);
+}
+
+function setAuthUserInfo(user) {
+    if (!user || !user.id) return;
+
+    localStorage.setItem(AUTH_STORAGE_KEYS.userId, String(user.id));
+    if (user.name) {
+        localStorage.setItem(AUTH_STORAGE_KEYS.userName, String(user.name));
+    }
+}
+
+function handleAuthFailure(message = 'Your session expired. Please log in again.') {
+    if (!isAuthenticated()) return;
+
+    clearAuthSession();
+    renderAuthNav();
+
+    if (!authFailureNotified) {
+        authFailureNotified = true;
+        showToast(message, 'info');
+        setTimeout(() => {
+            authFailureNotified = false;
+        }, 2500);
+    }
+
+    const route = getRoute();
+    if (route.page !== 'login' && route.page !== 'onboarding') {
+        navigateTo('login');
+    }
+}
+
+function logout() {
+    clearAuthSession();
+    renderAuthNav();
+    showToast('Logged out successfully.', 'success');
+    navigateTo('home');
+}
+
+async function validateStoredSession() {
+    if (!isAuthenticated()) return;
+
+    try {
+        const data = await apiRequest('/api/auth/me', {
+            auth: true,
+            retries: 0,
+            timeoutMs: 6000,
+        });
+
+        if (data?.user) {
+            setAuthUserInfo(data.user);
+        }
+    } catch (err) {
+        if (err.status === 401 || err.status === 403) {
+            handleAuthFailure();
+        }
+    }
+}
+
+function renderAuthNav() {
+    const container = document.getElementById('nav-auth-container');
+    if (!container) return;
+
+    if (isAuthenticated()) {
+        const userId = getCurrentUserId();
+        container.innerHTML = `
+          <a href="#messages" class="btn btn-ghost" style="padding: 8px 14px; font-size: 14px;">Messages</a>
+          <a href="#profile/${userId}" class="btn btn-secondary" style="padding: 8px 14px; font-size: 14px;">Profile</a>
+          <button type="button" class="btn btn-ghost" style="padding: 8px 14px; font-size: 14px;" onclick="logout()">Logout</button>
+          <button class="nav-hamburger" onclick="toggleMobileNav()">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        `;
+        return;
+    }
+
+    container.innerHTML = `
+      <a href="#login" class="btn btn-ghost" style="padding: 8px 16px; font-size: 14px;">Log In</a>
+      <a href="#onboarding" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Sign Up</a>
+      <button class="nav-hamburger" onclick="toggleMobileNav()">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    `;
+}
+
+async function apiRequest(path, options = {}) {
+    const {
+        method = 'GET',
+        body,
+        auth = false,
+        retries = 0,
+        timeoutMs = 10000,
+    } = options;
+
+    let lastError;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const headers = {};
+            if (body !== undefined) headers['Content-Type'] = 'application/json';
+            if (auth) {
+                const token = getAuthToken();
+                if (!token) throw new Error('Please log in to continue.');
+                headers.Authorization = `Bearer ${token}`;
+            }
+
+            const res = await fetch(path, {
+                method,
+                headers,
+                body: body !== undefined ? JSON.stringify(body) : undefined,
+                signal: controller.signal,
+            });
+
+            clearTimeout(timeout);
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                const error = new Error(data.error || data.message || 'Request failed');
+                error.status = res.status;
+
+                if ((res.status === 401 || res.status === 403) && auth) {
+                    handleAuthFailure();
+                }
+                throw error;
+            }
+
+            return data;
+        } catch (err) {
+            clearTimeout(timeout);
+            lastError = err;
+
+            if (err.name === 'AbortError') {
+                lastError = new Error('Request timed out. Please try again.');
+            }
+
+            const isRetryable = err.status >= 500 || err.name === 'AbortError' || !err.status;
+            if (!isRetryable || attempt === retries) {
+                throw lastError;
+            }
+        }
+    }
+
+    throw lastError || new Error('Unexpected request error');
+}
+
+function showToast(message, variant = 'info') {
+    const root = document.getElementById('toastRoot') || (() => {
+        const el = document.createElement('div');
+        el.id = 'toastRoot';
+        el.className = 'toast-root';
+        document.body.appendChild(el);
+        return el;
+    })();
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${variant}`;
+    toast.textContent = message;
+    root.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('toast-hide');
+        setTimeout(() => toast.remove(), 250);
+    }, 2600);
+}
+
 // --- Avatar Renderer ---
 function renderAvatar(user, sizeClass = '') {
-    const color = AVATAR_COLORS[user.avatarColor || 0];
-    return `<div class="avatar ${sizeClass}" style="background: ${color}">${user.initials}</div>`;
+    const color = AVATAR_COLORS[user?.avatarColor || 0] || AVATAR_COLORS[0];
+    const initials = user?.initials || String(user?.name || '?').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    return `<div class="avatar ${sizeClass}" style="background: ${escapeHtml(color)}">${escapeHtml(initials)}</div>`;
 }
 
 function renderAvatarStack(userIds, max = 4) {
@@ -24,7 +259,7 @@ function renderAvatarStack(userIds, max = 4) {
 
 // --- Tag Renderer ---
 function renderSkillTag(skill) {
-    return `<span class="tag ${getSkillColorClass(skill)}">${skill}</span>`;
+    return `<span class="tag ${getSkillColorClass(skill)}">${escapeHtml(skill)}</span>`;
 }
 
 function renderSkillTags(skills) {
@@ -38,14 +273,14 @@ function renderPersonCard(user, staggerIdx = 0) {
       <div class="person-card-header">
         ${renderAvatar(user)}
         <div class="person-card-info">
-          <h4>${user.name}</h4>
-          <span class="text-sm text-muted">${user.role} · ${user.experience}</span>
+          <h4>${escapeHtml(user.name)}</h4>
+          <span class="text-sm text-muted">${escapeHtml(user.role)} · ${escapeHtml(user.experience)}</span>
         </div>
         ${user.openToTeam ? '<span class="badge-status badge-online">Open</span>' : ''}
       </div>
       <div class="person-card-skills">${renderSkillTags(user.skills)}</div>
       <div class="person-card-footer">
-        <span class="text-xs text-muted">🕐 ${user.timezone}</span>
+        <span class="text-xs text-muted">🕐 ${escapeHtml(user.timezone)}</span>
         <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();">Connect</button>
       </div>
     </div>`;
@@ -56,12 +291,12 @@ function renderPersonListItem(user) {
     <div class="person-list-item" onclick="navigateTo('profile/${user.id}')">
       ${renderAvatar(user)}
       <div style="min-width:140px">
-        <h4 style="font-size:14px">${user.name}</h4>
-        <span class="text-xs text-muted">${user.role}</span>
+        <h4 style="font-size:14px">${escapeHtml(user.name)}</h4>
+        <span class="text-xs text-muted">${escapeHtml(user.role)}</span>
       </div>
       <div class="person-card-skills">${renderSkillTags(user.skills)}</div>
-      <span class="text-xs text-muted" style="white-space:nowrap">🕐 ${user.timezone}</span>
-      <span class="text-xs text-muted">${user.experience}</span>
+      <span class="text-xs text-muted" style="white-space:nowrap">🕐 ${escapeHtml(user.timezone)}</span>
+      <span class="text-xs text-muted">${escapeHtml(user.experience)}</span>
       <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();">Connect</button>
     </div>`;
 }
@@ -92,7 +327,8 @@ function getRoute() {
 function updateActiveNav() {
     const route = getRoute();
     document.querySelectorAll('.nav-links a').forEach(link => {
-        const href = link.getAttribute('href').slice(1);
+        const hrefAttr = link.getAttribute('href') || '';
+        const href = hrefAttr.startsWith('#') ? hrefAttr.slice(1) : hrefAttr;
         link.classList.toggle('active', href === route.page || (href === 'home' && route.page === 'home'));
     });
 }
@@ -100,6 +336,17 @@ function updateActiveNav() {
 function renderPage() {
     const route = getRoute();
     const app = document.getElementById('app');
+    renderAuthNav();
+
+    if (isAuthenticated() && (route.page === 'login' || route.page === 'onboarding')) {
+        navigateTo('home');
+        return;
+    }
+
+    if (!APP_ROUTES.has(route.page)) {
+        navigateTo('home');
+        return;
+    }
     updateActiveNav();
 
     // Close mobile nav and notification dropdown
@@ -109,41 +356,62 @@ function renderPage() {
     // Scroll to top
     window.scrollTo(0, 0);
 
-    switch (route.page) {
-        case 'home':
-            app.innerHTML = renderLanding();
-            break;
-        case 'onboarding':
-            app.innerHTML = renderOnboarding();
-            initOnboarding();
-            break;
-        case 'discover':
-            app.innerHTML = renderDiscover();
-            initDiscover();
-            break;
-        case 'hackathons':
-            app.innerHTML = renderHackathons();
-            initHackathons();
-            break;
-        case 'hackathon':
-            app.innerHTML = renderHackathonDetail(route.param);
-            break;
-        case 'teams':
-            app.innerHTML = renderTeamBoard();
-            initTeamBoard();
-            break;
-        case 'profile':
-            app.innerHTML = renderProfile(route.param);
-            break;
-        case 'messages':
-            app.innerHTML = renderMessages();
-            initMessages();
-            break;
-        case 'showcase':
-            app.innerHTML = renderShowcase();
-            break;
-        default:
-            app.innerHTML = renderLanding();
+    try {
+        switch (route.page) {
+            case 'home':
+                app.innerHTML = renderLanding();
+                if (typeof initLanding === 'function') initLanding();
+                break;
+            case 'login':
+                app.innerHTML = renderLogin();
+                if (typeof initLogin === 'function') initLogin();
+                break;
+            case 'onboarding':
+                app.innerHTML = renderOnboarding();
+                initOnboarding();
+                break;
+            case 'discover':
+                app.innerHTML = renderDiscover();
+                initDiscover();
+                break;
+            case 'hackathons':
+                app.innerHTML = renderHackathons();
+                initHackathons();
+                break;
+            case 'hackathon':
+                app.innerHTML = renderHackathonDetail(route.param);
+                if (typeof initHackathonDetail === 'function') initHackathonDetail(route.param);
+                break;
+            case 'teams':
+                app.innerHTML = renderTeamBoard();
+                initTeamBoard();
+                break;
+            case 'profile':
+                app.innerHTML = renderProfile(route.param);
+                if (typeof initProfile === 'function') initProfile(route.param);
+                break;
+            case 'messages':
+                app.innerHTML = renderMessages();
+                initMessages();
+                break;
+            case 'showcase':
+                app.innerHTML = renderShowcase();
+                if (typeof initShowcase === 'function') initShowcase();
+                break;
+            default:
+                app.innerHTML = renderLanding();
+        }
+    } catch {
+        app.innerHTML = `
+        <div class="page">
+          <div class="container" style="padding-top:40px">
+            <div class="card" style="text-align:center;padding:40px">
+              <h3 style="margin-bottom:8px">Something went wrong</h3>
+              <p class="text-muted" style="margin-bottom:16px">Please refresh or try another page.</p>
+              <button class="btn btn-primary" onclick="navigateTo('home')">Go home</button>
+            </div>
+          </div>
+        </div>`;
     }
 }
 
@@ -180,7 +448,9 @@ function toggleMobileNav() {
 }
 
 // --- Init ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await validateStoredSession();
+    renderAuthNav();
     renderPage();
 
     // Close notifications when clicking outside

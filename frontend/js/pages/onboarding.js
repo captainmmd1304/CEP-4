@@ -34,10 +34,18 @@ function renderOnboarding() {
             <!-- Step 1 -->
             <div class="onboarding-step active" id="step1">
               <div class="card" style="padding:32px">
-                <h3 style="margin-bottom:24px">👋 About You</h3>
+                <h3 style="margin-bottom:24px">👋 Account & About You</h3>
                 <div class="form-group">
                   <label class="form-label">Full Name</label>
                   <input type="text" id="obName" placeholder="e.g. Aisha Patel" oninput="updatePreview()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Email Address</label>
+                  <input type="email" id="obEmail" placeholder="you@example.com">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Password</label>
+                  <input type="password" id="obPassword" placeholder="Minimum 6 characters">
                 </div>
                 <div class="form-group">
                   <label class="form-label">Bio</label>
@@ -241,16 +249,67 @@ function updatePreview() {
 
   if (previewLinks) {
     let linksHtml = '';
-    if (github) linksHtml += `<a href="${github}" class="btn btn-ghost btn-sm" target="_blank">GitHub</a>`;
-    if (linkedin) linksHtml += `<a href="${linkedin}" class="btn btn-ghost btn-sm" target="_blank">LinkedIn</a>`;
+    const githubUrl = safeExternalUrl(github);
+    const linkedinUrl = safeExternalUrl(linkedin);
+    if (githubUrl) linksHtml += `<a href="${githubUrl}" class="btn btn-ghost btn-sm" target="_blank" rel="noopener noreferrer">GitHub</a>`;
+    if (linkedinUrl) linksHtml += `<a href="${linkedinUrl}" class="btn btn-ghost btn-sm" target="_blank" rel="noopener noreferrer">LinkedIn</a>`;
     previewLinks.innerHTML = linksHtml;
   }
 }
 
-function nextStep() {
+async function nextStep() {
   if (currentStep >= 4) {
-    // Submit - go to profile
-    navigateTo('profile/1');
+    const name = document.getElementById('obName')?.value?.trim() || '';
+    const email = document.getElementById('obEmail')?.value?.trim() || '';
+    const password = document.getElementById('obPassword')?.value || '';
+
+    if (!name || !email || !password || password.length < 6 || !email.includes('@')) {
+      showToast('Enter valid name, email, and password (6+ chars).', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('nextBtn');
+    const originalText = btn.textContent;
+    btn.textContent = 'Creating Account...';
+    btn.disabled = true;
+
+    try {
+      const data = await apiRequest('/api/auth/register', {
+        method: 'POST',
+        body: { name, email, password },
+        timeoutMs: 10000,
+      });
+
+      const token = data.token;
+      const userId = data.user.id;
+      
+      // Store auth for future requests
+      localStorage.setItem(AUTH_STORAGE_KEYS.token, token);
+      setAuthUserInfo({ id: userId, name });
+      if (typeof renderAuthNav === 'function') renderAuthNav();
+
+      await apiRequest('/api/users/me', {
+        method: 'PATCH',
+        auth: true,
+        body: {
+          bio: document.getElementById('obBio')?.value?.trim() || '',
+          experience: selectedExperience || 'Beginner',
+          timezone: document.getElementById('obTimezone')?.value || 'UTC+0 (GMT)',
+          role: selectedRole || 'Builder',
+          github: document.getElementById('obGithub')?.value?.trim() || '',
+          linkedin: document.getElementById('obLinkedin')?.value?.trim() || '',
+          skills: selectedSkills,
+        },
+        timeoutMs: 10000,
+      });
+
+      showToast('Account created successfully.', 'success');
+      navigateTo(`profile/${userId}`);
+    } catch (err) {
+      showToast(err.message || 'Could not create account.', 'error');
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
     return;
   }
 

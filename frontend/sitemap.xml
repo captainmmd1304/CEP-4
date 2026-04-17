@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>/#/home</loc></url>
+  <url><loc>/#/discover</loc></url>
+  <url><loc>/#/hackathons</loc></url>
+  <url><loc>/#/teams</loc></url>
+  <url><loc>/#/showcase</loc></url>
+  <url><loc>/#/onboarding</loc></url>
+  <url><loc>/#/login</loc></url>
+</urlset>

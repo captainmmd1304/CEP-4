@@ -1,158 +1,204 @@
-// ===== MESSAGES / CONNECTION PAGE =====
+let inboxConversations = [];
+let activeConversationId = null;
+
 function renderMessages() {
-    return `
+  return `
     <div class="page">
       <div class="container">
         <h2 style="margin-bottom:24px">Messages</h2>
         <div class="inbox-layout">
-          <!-- Sidebar -->
           <div class="inbox-sidebar" id="inboxSidebar">
-            <div class="inbox-sidebar-header">
-              <div style="display:flex;align-items:center;justify-content:space-between">
-                <h4>Inbox</h4>
-                <span class="tag tag-blue">${MESSAGES.filter(m => m.type === 'request').length} new</span>
-              </div>
+            <div class="inbox-sidebar-header" style="display:flex;align-items:center;justify-content:space-between">
+              <h4>Inbox</h4>
+              <span class="tag tag-blue" id="inboxCount">0</span>
             </div>
-            
-            <!-- Pending requests -->
-            ${MESSAGES.filter(m => m.type === 'request').map((m, i) => `
-              <div class="conversation-item ${i === 0 ? 'active' : ''}" onclick="showConversation(${m.id})" id="conv-${m.id}">
-                ${renderAvatar(m.from, 'avatar-sm')}
-                <div style="flex:1;min-width:0">
-                  <div style="display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-weight:600;font-size:14px">${m.from.name}</span>
-                    <span class="text-xs text-muted">${m.timestamp}</span>
-                  </div>
-                  <p class="text-xs text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔔 Team-up request</p>
-                </div>
-              </div>
-            `).join('')}
-
-            <!-- Active chats -->
-            ${MESSAGES.filter(m => m.type === 'chat').map(m => `
-              <div class="conversation-item" onclick="showConversation(${m.id})" id="conv-${m.id}">
-                ${renderAvatar(m.from, 'avatar-sm')}
-                <div style="flex:1;min-width:0">
-                  <div style="display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-weight:600;font-size:14px">${m.from.name}</span>
-                    <span class="text-xs text-muted">${m.timestamp}</span>
-                  </div>
-                  <p class="text-xs text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.messages[m.messages.length - 1].text}</p>
-                </div>
-              </div>
-            `).join('')}
+            <div id="inboxList">
+              <div class="text-muted" style="padding:20px">Loading conversations...</div>
+            </div>
           </div>
-
-          <!-- Chat Pane -->
           <div class="chat-pane" id="chatPane">
-            ${renderMessagePane(MESSAGES[0])}
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Select a conversation</div>
           </div>
         </div>
       </div>
     </div>`;
 }
 
-function renderMessagePane(msg) {
-    if (!msg) return '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Select a conversation</div>';
+function initMessages() {
+  if (!getAuthToken()) {
+    showToast('Please log in to open messages.', 'error');
+    navigateTo('login');
+    return;
+  }
 
-    if (msg.type === 'request') {
-        return `
+  loadInbox();
+}
+
+async function loadInbox() {
+  try {
+    const data = await apiRequest('/api/messages/inbox', {
+      auth: true,
+      retries: 1,
+      timeoutMs: 10000,
+    });
+
+    inboxConversations = Array.isArray(data.conversations) ? data.conversations : [];
+    renderInboxList();
+
+    if (inboxConversations.length > 0) {
+      showConversation(inboxConversations[0].id);
+    }
+  } catch (err) {
+    showToast(err.message || 'Could not load inbox.', 'error');
+    const list = document.getElementById('inboxList');
+    if (list) {
+      list.innerHTML = '<div class="text-muted" style="padding:20px">Could not load conversations.</div>';
+    }
+  }
+}
+
+function renderInboxList() {
+  const list = document.getElementById('inboxList');
+  const count = document.getElementById('inboxCount');
+  if (!list || !count) return;
+
+  count.textContent = String(inboxConversations.length);
+
+  if (inboxConversations.length === 0) {
+    list.innerHTML = '<div class="text-muted" style="padding:20px">No conversations yet.</div>';
+    return;
+  }
+
+  list.innerHTML = inboxConversations.map((item) => `
+    <button type="button" class="conversation-item ${item.id === activeConversationId ? 'active' : ''}" onclick="showConversation(${item.id})" id="conv-${item.id}">
+      ${renderAvatar(item.from, 'avatar-sm')}
+      <div style="flex:1;min-width:0;text-align:left">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-weight:600;font-size:14px">${escapeHtml(item.from.name)}</span>
+          <span class="text-xs text-muted">${new Date(item.updatedAt).toLocaleDateString()}</span>
+        </div>
+        <p class="text-xs text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${item.type === 'request' ? 'Team-up request' : escapeHtml(item.lastMessage?.text || 'No messages yet')}
+        </p>
+      </div>
+    </button>`).join('');
+}
+
+async function showConversation(conversationId) {
+  activeConversationId = conversationId;
+  renderInboxList();
+
+  const pane = document.getElementById('chatPane');
+  if (!pane) return;
+
+  pane.innerHTML = '<div class="text-muted" style="padding:20px">Loading conversation...</div>';
+
+  try {
+    const data = await apiRequest(`/api/messages/${conversationId}`, {
+      auth: true,
+      retries: 1,
+      timeoutMs: 10000,
+    });
+    pane.innerHTML = renderMessagePane(data.conversation);
+  } catch (err) {
+    pane.innerHTML = '<div class="text-muted" style="padding:20px">Could not load conversation.</div>';
+    showToast(err.message || 'Unable to open conversation.', 'error');
+  }
+}
+
+function renderMessagePane(conversation) {
+  if (!conversation) {
+    return '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">Select a conversation</div>';
+  }
+
+  if (conversation.type === 'request' && conversation.status !== 'accepted') {
+    const canRespond = getCurrentUserId() === conversation.to.id;
+
+    return `
       <div class="chat-header">
-        ${renderAvatar(msg.from, 'avatar-sm')}
+        ${renderAvatar(conversation.from, 'avatar-sm')}
         <div>
-          <span style="font-weight:600;font-size:14px">${msg.from.name}</span>
-          <span class="text-xs text-muted" style="display:block">${msg.from.role} · ${msg.from.experience}</span>
+          <span style="font-weight:600;font-size:14px">${escapeHtml(conversation.from.name)}</span>
+          <span class="text-xs text-muted" style="display:block">${escapeHtml(conversation.from.role)} · ${escapeHtml(conversation.from.experience)}</span>
         </div>
       </div>
       <div class="chat-messages" style="justify-content:center;align-items:center">
-        <div class="request-card" style="max-width:420px;text-align:center">
-          <div style="margin-bottom:16px">
-            ${renderAvatar(msg.from, 'avatar-lg')}
-          </div>
-          <h4 style="margin-bottom:4px">${msg.from.name}</h4>
-          <p class="text-sm text-muted" style="margin-bottom:12px">${msg.from.role} · ${msg.from.timezone}</p>
-          <div style="display:flex;justify-content:center;gap:6px;margin-bottom:16px">
-            ${renderSkillTags(msg.from.skills)}
-          </div>
-          <div class="card" style="padding:16px;margin-bottom:16px;text-align:left;background:var(--surface)">
-            <p style="font-size:14px;line-height:1.6;color:var(--text-secondary)">"${msg.message}"</p>
-          </div>
-          <span class="text-xs text-muted">${msg.timestamp}</span>
-          <div class="request-actions" style="justify-content:center">
-            <button class="btn btn-primary" onclick="acceptRequest(${msg.id})">✓ Accept</button>
-            <button class="btn btn-secondary" onclick="declineRequest(${msg.id})">✕ Decline</button>
-          </div>
+        <div class="request-card" style="max-width:460px;text-align:center">
+          <h4 style="margin-bottom:8px">Team-up request</h4>
+          <p class="text-sm text-muted" style="margin-bottom:12px">"${escapeHtml(conversation.requestMessage || '')}"</p>
+          ${canRespond && conversation.status === 'pending'
+            ? `<div class="request-actions" style="justify-content:center">
+                <button class="btn btn-primary" type="button" onclick="respondToRequest(${conversation.id}, 'accept')">Accept</button>
+                <button class="btn btn-secondary" type="button" onclick="respondToRequest(${conversation.id}, 'decline')">Decline</button>
+              </div>`
+            : `<p class="text-xs text-muted">Request status: ${escapeHtml(conversation.status || 'pending')}</p>`}
         </div>
       </div>`;
-    }
+  }
 
-    // Chat thread
-    return `
+  return `
     <div class="chat-header">
-      ${renderAvatar(msg.from, 'avatar-sm')}
+      ${renderAvatar(conversation.from, 'avatar-sm')}
       <div>
-        <span style="font-weight:600;font-size:14px">${msg.from.name}</span>
-        <span class="text-xs text-muted" style="display:block">${msg.from.role}</span>
+        <span style="font-weight:600;font-size:14px">${escapeHtml(conversation.from.name)}</span>
+        <span class="text-xs text-muted" style="display:block">${escapeHtml(conversation.from.role)}</span>
       </div>
       <div style="margin-left:auto">
-        <button class="btn btn-ghost btn-sm" onclick="navigateTo('profile/${msg.from.id}')">View Profile</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="navigateTo('profile/${conversation.from.id}')">View Profile</button>
       </div>
     </div>
-    <div class="chat-messages">
-      ${msg.messages.map(m => `
-        <div style="display:flex;flex-direction:column;${m.sender === 'me' ? 'align-items:flex-end' : 'align-items:flex-start'}">
-          <div class="chat-bubble ${m.sender === 'me' ? 'sent' : 'received'}">${m.text}</div>
-          <span class="text-xs text-muted" style="margin-top:4px">${m.time}</span>
-        </div>
-      `).join('')}
+    <div class="chat-messages" id="chatMessages">
+      ${(conversation.messages || []).map((m) => {
+        const own = getCurrentUserId() === m.senderId;
+        return `
+          <div style="display:flex;flex-direction:column;${own ? 'align-items:flex-end' : 'align-items:flex-start'}">
+            <div class="chat-bubble ${own ? 'sent' : 'received'}">${escapeHtml(m.text)}</div>
+            <span class="text-xs text-muted" style="margin-top:4px">${new Date(m.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>`;
+      }).join('')}
     </div>
     <div class="chat-input-area">
-      <input type="text" placeholder="Type a message..." id="chatInput" onkeydown="if(event.key==='Enter')sendMessage(${msg.id})">
-      <button class="btn btn-primary" onclick="sendMessage(${msg.id})">Send</button>
+      <input type="text" placeholder="Type a message..." id="chatInput" onkeydown="if(event.key==='Enter')sendMessage()">
+      <button class="btn btn-primary" type="button" onclick="sendMessage()">Send</button>
     </div>`;
 }
 
-function initMessages() { }
-
-function showConversation(msgId) {
-    const msg = MESSAGES.find(m => m.id === msgId);
-    document.querySelectorAll('.conversation-item').forEach(ci => ci.classList.remove('active'));
-    document.getElementById(`conv-${msgId}`)?.classList.add('active');
-    const pane = document.getElementById('chatPane');
-    if (pane) pane.innerHTML = renderMessagePane(msg);
+async function respondToRequest(conversationId, action) {
+  try {
+    await apiRequest(`/api/messages/${conversationId}/${action}`, {
+      method: 'POST',
+      auth: true,
+      timeoutMs: 10000,
+    });
+    showToast(action === 'accept' ? 'Request accepted.' : 'Request declined.', 'success');
+    await loadInbox();
+  } catch (err) {
+    showToast(err.message || 'Could not update request.', 'error');
+  }
 }
 
-function acceptRequest(msgId) {
-    const msg = MESSAGES.find(m => m.id === msgId);
-    if (msg) {
-        msg.type = 'chat';
-        msg.messages = [
-            { text: msg.message, sender: 'them', time: 'Earlier' },
-            { text: 'Accepted! Let\'s chat about the project.', sender: 'me', time: 'Just now' },
-        ];
-    }
-    showConversation(msgId);
-}
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
 
-function declineRequest(msgId) {
-    const pane = document.getElementById('chatPane');
-    if (pane) {
-        pane.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);flex-direction:column;gap:8px"><p>Request declined.</p><button class="btn btn-ghost btn-sm" onclick="showConversation(1)">← Back to inbox</button></div>';
-    }
-}
+  const text = input.value.trim();
+  if (!text || !activeConversationId) return;
 
-function sendMessage(msgId) {
-    const input = document.getElementById('chatInput');
-    if (!input || !input.value.trim()) return;
+  input.disabled = true;
 
-    const msg = MESSAGES.find(m => m.id === msgId);
-    if (msg && msg.messages) {
-        msg.messages.push({ text: input.value, sender: 'me', time: 'Just now' });
-        showConversation(msgId);
-        // Re-focus and scroll
-        setTimeout(() => {
-            const chatMsgs = document.querySelector('.chat-messages');
-            if (chatMsgs) chatMsgs.scrollTop = chatMsgs.scrollHeight;
-        }, 50);
-    }
+  try {
+    await apiRequest(`/api/messages/${activeConversationId}/send`, {
+      method: 'POST',
+      auth: true,
+      body: { text },
+      timeoutMs: 10000,
+    });
+    input.value = '';
+    await showConversation(activeConversationId);
+  } catch (err) {
+    showToast(err.message || 'Could not send message.', 'error');
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
 }

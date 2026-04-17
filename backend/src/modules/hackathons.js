@@ -74,6 +74,9 @@ router.post('/:id/toggle-going', authRequired, asyncHandler(async (req, res) => 
   const hackathonId = Number(req.params.id);
   const userId = Number(req.auth.userId);
 
+  const exists = await prisma.hackathon.findUnique({ where: { id: hackathonId } });
+  if (!exists) throw new AppError(404, 'Hackathon not found');
+
   const existing = await prisma.hackathonAttendee.findUnique({
     where: { hackathonId_userId: { hackathonId, userId } },
   });
@@ -92,7 +95,6 @@ router.post('/:id/toggle-going', authRequired, asyncHandler(async (req, res) => 
     where: { id: hackathonId },
     include: { attendees: true },
   });
-  if (!hackathon) throw new AppError(404, 'Hackathon not found');
 
   res.json({ hackathon: toHackathonDto(hackathon, userId) });
 }));

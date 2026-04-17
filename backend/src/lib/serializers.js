@@ -1,8 +1,10 @@
-export function toUserDto(user) {
+export function toUserDto(user, options = {}) {
+  const { includeEmail = false } = options;
+
   return {
     id: user.id,
     name: user.name,
-    email: user.email,
+    ...(includeEmail ? { email: user.email } : {}),
     initials: user.initials,
     bio: user.bio,
     experience: user.experience,

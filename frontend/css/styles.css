@@ -955,10 +955,51 @@ h5 { font-size: 1rem; font-weight: 500; }
   border-bottom: 1px solid var(--surface-border);
   cursor: pointer;
   transition: background var(--transition);
+  width: 100%;
+  border-left: 3px solid transparent;
 }
 
 .conversation-item:hover { background: var(--surface); }
 .conversation-item.active { background: rgba(0, 212, 255, 0.06); border-left: 3px solid var(--accent-blue); }
+
+.toast-root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+  animation: fadeIn 0.2s ease;
+  font-size: 13px;
+}
+
+.toast-success {
+  border-color: rgba(0, 255, 136, 0.35);
+}
+
+.toast-error {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.toast-info {
+  border-color: rgba(0, 212, 255, 0.35);
+}
+
+.toast-hide {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
 
 .chat-pane {
   display: flex;
@@ -1184,6 +1225,20 @@ h5 { font-size: 1rem; font-weight: 500; }
   position: relative;
 }
 
+.home-welcome-card {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  width: min(320px, calc(100% - 48px));
+  text-align: left;
+  background: rgba(26, 26, 46, 0.75);
+  border: 1px solid rgba(0, 212, 255, 0.18);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  backdrop-filter: blur(14px);
+  z-index: 2;
+}
+
 .hero::before {
   content: '';
   position: absolute;
@@ -1314,6 +1369,7 @@ h5 { font-size: 1rem; font-weight: 500; }
   .inbox-layout { grid-template-columns: 1fr; }
   .inbox-sidebar { display: none; }
   .inbox-sidebar.mobile-active { display: block; position: absolute; inset: 0; z-index: 10; }
+  .home-welcome-card { position: static; width: 100%; margin-bottom: 16px; }
 }
 
 @media (max-width: 768px) {
