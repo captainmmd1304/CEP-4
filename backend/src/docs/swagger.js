@@ -23,6 +23,7 @@ const swaggerSpec = {
     { name: 'Messages', description: 'Inbox and direct messaging' },
     { name: 'Notifications', description: 'Real-time alerts' },
     { name: 'Showcase', description: 'Project showcases' },
+    { name: 'ML', description: 'ML teammate and team recommendations' },
   ],
   components: {
     securitySchemes: {
@@ -317,6 +318,68 @@ const swaggerSpec = {
         security: [],
         responses: {
           '200': { description: 'Projects retrieved successfully' },
+        },
+      },
+    },
+    '/api/ml/recommend/{userId}': {
+      post: {
+        tags: ['ML'],
+        summary: 'Get top teammate recommendations for user',
+        parameters: [{ in: 'path', name: 'userId', required: true, schema: { type: 'integer' } }],
+        responses: {
+          '200': { description: 'Recommendation list generated' },
+          '403': { description: 'Forbidden for other users' },
+        },
+      },
+    },
+    '/api/ml/generate-team': {
+      post: {
+        tags: ['ML'],
+        summary: 'Auto-generate optimized team of size 4 or 5',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['teamSize'],
+                properties: {
+                  teamSize: { type: 'integer', enum: [4, 5] },
+                  theme: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Optimized team generated' },
+          '400': { description: 'Invalid team size' },
+        },
+      },
+    },
+    '/api/ml/feedback': {
+      post: {
+        tags: ['ML'],
+        summary: 'Submit accept/reject feedback for a recommendation',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['userId', 'recommendedId', 'action'],
+                properties: {
+                  userId: { type: 'integer' },
+                  recommendedId: { type: 'integer' },
+                  action: { type: 'string', enum: ['accept', 'reject'] },
+                  context: { type: 'string', enum: ['recommend', 'team-gen'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Feedback recorded' },
         },
       },
     },

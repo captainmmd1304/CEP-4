@@ -55,7 +55,7 @@ async function initProfile(userId) {
                     <span class="text-sm">Open to team up</span>
                     <button class="toggle ${user.openToTeam ? 'active' : ''}" type="button" onclick="toggleOpenToTeam(this, ${user.openToTeam})"></button>
                   </div>`
-                : `<button class="btn btn-primary" type="button" onclick="showToast('Messaging starts from Discover or Hackathon pages.', 'info')">Connect</button>`}
+                : `<button class="btn btn-primary" type="button" onclick="sendConnectRequest(${user.id}, this)">Connect</button>`}
             </div>
           </div>
         </div>
@@ -143,11 +143,74 @@ async function initProfile(userId) {
                 </div>
               </div>`
             : ''}
+
+          ${isOwnProfile
+            ? `<div class="card animate-fade-in stagger-7" style="grid-column:1/-1">
+                <div class="profile-section" style="margin-bottom:0">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+                    <h3 style="margin:0">ML Recommendations</h3>
+                    <button class="btn btn-secondary btn-sm" type="button" onclick="loadProfileMlRecommendations(${user.id})">Refresh</button>
+                  </div>
+                  <div id="profileMlSection"><p class="text-muted">Load teammate suggestions personalized for your profile.</p></div>
+                </div>
+              </div>`
+            : ''}
         </div>
       </div>
     </div>`;
+
+    if (isOwnProfile) {
+      loadProfileMlRecommendations(user.id, true);
+    }
   } catch {
     wrapper.innerHTML = '<div class="page"><div class="container"><div class="card" style="margin-top:24px"><h3>User not found</h3><p class="text-muted">Try another profile from discover.</p></div></div></div>';
+  }
+}
+
+async function loadProfileMlRecommendations(userId, silent = false) {
+  const section = document.getElementById('profileMlSection');
+  if (!section) return;
+
+  if (!getAuthToken()) {
+    section.innerHTML = '<p class="text-muted">Sign in to view personalized recommendations.</p>';
+    return;
+  }
+
+  section.innerHTML = '<p class="text-muted">Loading recommendations...</p>';
+
+  try {
+    const data = await apiRequest(`/api/ml/recommend/${userId}`, {
+      method: 'POST',
+      auth: true,
+      timeoutMs: 12000,
+    });
+
+    const matches = Array.isArray(data.matches) ? data.matches.slice(0, 3) : [];
+    if (matches.length === 0) {
+      section.innerHTML = '<p class="text-muted">No recommendations available right now.</p>';
+      return;
+    }
+
+    section.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${matches.map((match) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border:1px solid var(--surface-border);border-radius:10px;padding:10px 12px">
+            <div>
+              <div style="font-weight:600">${escapeHtml(match.name || 'Unknown')}</div>
+              <div class="text-xs text-muted">${escapeHtml(match.role || '')} · ${escapeHtml(match.experience || '')}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="tag tag-blue">Score ${Number(match.score || 0)}</span>
+              <span class="text-xs text-muted">${escapeHtml((match.reason || []).join(', '))}</span>
+              <button class="btn btn-outline btn-sm" type="button" onclick="sendConnectRequest(${Number(match.userId)}, this)">Connect</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+    if (!silent) showToast('Profile recommendations updated.', 'success');
+  } catch (err) {
+    section.innerHTML = '<p class="text-muted">Could not load recommendations right now.</p>';
+    if (!silent) showToast(err.message || 'Could not load recommendations.', 'error');
   }
 }
 

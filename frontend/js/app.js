@@ -14,6 +14,8 @@ const APP_ROUTES = new Set([
 ]);
 
 let authFailureNotified = false;
+let appNotifications = [];
+let pollInterval = null;
 
 const AUTH_STORAGE_KEYS = {
     token: 'code_sathi_token',
@@ -63,6 +65,11 @@ function clearAuthSession() {
     localStorage.removeItem(AUTH_STORAGE_KEYS.token);
     localStorage.removeItem(AUTH_STORAGE_KEYS.userId);
     localStorage.removeItem(AUTH_STORAGE_KEYS.userName);
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+    appNotifications = [];
 }
 
 function setAuthUserInfo(user) {
@@ -114,10 +121,37 @@ async function validateStoredSession() {
         if (data?.user) {
             setAuthUserInfo(data.user);
         }
+        
+        fetchNotifications();
+        if (!pollInterval) {
+            pollInterval = setInterval(fetchNotifications, 15000);
+        }
     } catch (err) {
         if (err.status === 401 || err.status === 403) {
             handleAuthFailure();
         }
+    }
+}
+
+async function fetchNotifications() {
+    if (!isAuthenticated()) return;
+    try {
+        const data = await apiRequest('/api/notifications', { auth: true, retries: 0, timeoutMs: 5000 });
+        appNotifications = Array.isArray(data.notifications) ? data.notifications : [];
+        updateNotificationsUI();
+    } catch (err) {}
+}
+
+function updateNotificationsUI() {
+    const badge = document.getElementById('nav-notification-badge');
+    if (badge) {
+        const unreadCount = appNotifications.filter(n => n.unread).length;
+        badge.style.display = unreadCount > 0 ? 'block' : 'none';
+    }
+    const dropdown = document.getElementById('notificationsDropdown');
+    if (dropdown) {
+        const isVisible = dropdown.style.display === 'flex';
+        dropdown.outerHTML = renderNotificationsDropdown(isVisible);
     }
 }
 
@@ -128,6 +162,13 @@ function renderAuthNav() {
     if (isAuthenticated()) {
         const userId = getCurrentUserId();
         container.innerHTML = `
+          <div class="nav-notifications" style="position:relative; margin-right: 8px; display: flex; align-items: center;" onclick="toggleNotifications(event)">
+            <button class="btn btn-ghost" style="padding: 8px; position: relative;" aria-label="Notifications">
+              <span style="font-size: 18px;">🔔</span>
+              <span id="nav-notification-badge" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: var(--primary); border-radius: 50%; display: none;"></span>
+            </button>
+            ${renderNotificationsDropdown(false)}
+          </div>
           <a href="#messages" class="btn btn-ghost" style="padding: 8px 14px; font-size: 14px;">Messages</a>
           <a href="#profile/${userId}" class="btn btn-secondary" style="padding: 8px 14px; font-size: 14px;">Profile</a>
           <button type="button" class="btn btn-ghost" style="padding: 8px 14px; font-size: 14px;" onclick="logout()">Logout</button>
@@ -137,6 +178,7 @@ function renderAuthNav() {
             <span></span>
           </button>
         `;
+        updateNotificationsUI();
         return;
     }
 
@@ -281,7 +323,7 @@ function renderPersonCard(user, staggerIdx = 0) {
       <div class="person-card-skills">${renderSkillTags(user.skills)}</div>
       <div class="person-card-footer">
         <span class="text-xs text-muted">🕐 ${escapeHtml(user.timezone)}</span>
-        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();">Connect</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); sendConnectRequest(${user.id}, this)">Connect</button>
       </div>
     </div>`;
 }
@@ -297,8 +339,41 @@ function renderPersonListItem(user) {
       <div class="person-card-skills">${renderSkillTags(user.skills)}</div>
       <span class="text-xs text-muted" style="white-space:nowrap">🕐 ${escapeHtml(user.timezone)}</span>
       <span class="text-xs text-muted">${escapeHtml(user.experience)}</span>
-      <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();">Connect</button>
+      <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); sendConnectRequest(${user.id}, this)">Connect</button>
     </div>`;
+}
+
+async function sendConnectRequest(userId, btnElement) {
+    if (!isAuthenticated()) {
+        showToast('Please log in to connect.', 'error');
+        navigateTo('login');
+        return;
+    }
+    
+    if (getCurrentUserId() === userId) {
+        showToast("You can't connect with yourself.", 'error');
+        return;
+    }
+
+    try {
+        btnElement.disabled = true;
+        btnElement.textContent = 'Sending...';
+
+        await apiRequest(`/api/users/${userId}/connect`, {
+            method: 'POST',
+            auth: true,
+            timeoutMs: 10000,
+        });
+
+        showToast('Connection request sent!', 'success');
+        btnElement.textContent = 'Pending';
+        btnElement.classList.remove('btn-outline');
+        btnElement.classList.add('btn-secondary');
+    } catch (err) {
+        showToast(err.message || 'Could not send request.', 'error');
+        btnElement.disabled = false;
+        btnElement.textContent = 'Connect';
+    }
 }
 
 // --- Notification Icon ---
@@ -351,7 +426,8 @@ function renderPage() {
 
     // Close mobile nav and notification dropdown
     document.querySelector('.nav-links')?.classList.remove('mobile-active');
-    document.querySelector('.notifications-dropdown')?.classList.remove('active');
+    const notifDropdown = document.getElementById('notificationsDropdown');
+    if (notifDropdown) notifDropdown.style.display = 'none';
 
     // Scroll to top
     window.scrollTo(0, 0);
@@ -418,28 +494,46 @@ function renderPage() {
 // --- Notification Dropdown ---
 function toggleNotifications(e) {
     e.stopPropagation();
-    const dropdown = document.querySelector('.notifications-dropdown');
-    dropdown.classList.toggle('active');
+    const dropdown = document.getElementById('notificationsDropdown');
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'none' || dropdown.style.display === '' ? 'flex' : 'none';
+    }
 }
 
-function renderNotificationsDropdown() {
+function renderNotificationsDropdown(isVisible = false) {
+    const unreadCount = appNotifications.filter(n => n.unread).length;
     return `
-    <div class="notifications-dropdown" id="notificationsDropdown">
+    <div class="notifications-dropdown" id="notificationsDropdown" style="position:absolute; top:100%; right:0; margin-top:8px; width:320px; background:var(--surface); border:1px solid var(--surface-border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.2); display:${isVisible ? 'flex' : 'none'}; flex-direction:column; z-index:100; overflow:hidden;">
       <div style="padding: 16px 20px; border-bottom: 1px solid var(--surface-border); display:flex; align-items:center; justify-content:space-between;">
         <h4>Notifications</h4>
-        <span class="text-xs text-muted">${NOTIFICATIONS.filter(n => n.unread).length} unread</span>
+        <span class="text-xs text-muted">${unreadCount} unread</span>
       </div>
-      ${NOTIFICATIONS.map(n => `
-        <div class="notification-item ${n.unread ? 'unread' : ''}">
-          ${n.unread ? '' : ''}
+      <div style="max-height: 400px; overflow-y: auto;">
+      ${appNotifications.length === 0 ? '<div style="padding:20px; text-align:center;" class="text-muted">No notifications</div>' : ''}
+      ${appNotifications.map(n => `
+        <div class="notification-item ${n.unread ? 'unread' : ''}" style="padding:16px 20px; border-bottom:1px solid var(--surface-border); display:flex; gap:12px; cursor:pointer; background:${n.unread ? 'rgba(0,212,255,0.05)' : 'transparent'}; transition: background 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='${n.unread ? 'rgba(0,212,255,0.05)' : 'transparent'}'" onclick="handleNotificationClick(${n.id}, event)">
           <span style="font-size:18px;flex-shrink:0">${getNotificationIcon(n.type)}</span>
           <div style="flex:1;min-width:0">
-            <p style="font-size:13px;margin:0">${n.text}</p>
-            <span class="text-xs text-muted">${n.time}</span>
+            <p style="font-size:13px;margin:0; ${n.unread ? 'font-weight:600;' : ''}">${escapeHtml(n.text)}</p>
+            <span class="text-xs text-muted">${escapeHtml(n.time)}</span>
           </div>
         </div>
       `).join('')}
+      </div>
     </div>`;
+}
+
+async function handleNotificationClick(id, event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('notificationsDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    
+    try {
+        await apiRequest(`/api/notifications/${id}/read`, { method: 'POST', auth: true, retries: 0 });
+        fetchNotifications();
+    } catch (e) {}
+    
+    navigateTo('messages');
 }
 
 // --- Mobile hamburger ---
@@ -455,9 +549,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Close notifications when clicking outside
     document.addEventListener('click', (e) => {
-        const dropdown = document.querySelector('.notifications-dropdown');
+        const dropdown = document.getElementById('notificationsDropdown');
         if (dropdown && !e.target.closest('.nav-notifications')) {
-            dropdown.classList.remove('active');
+            dropdown.style.display = 'none';
         }
     });
 });

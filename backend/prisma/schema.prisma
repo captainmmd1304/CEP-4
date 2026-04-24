@@ -37,6 +37,8 @@ model User {
   endorsementsGiven  Endorsement[]       @relation("EndorsementFrom")
   endorsementsGot    Endorsement[]       @relation("EndorsementTo")
   projectMemberships ProjectMember[]
+  feedbackGiven      MlFeedback[]        @relation("MlFeedbackUser")
+  feedbackReceived   MlFeedback[]        @relation("MlFeedbackTarget")
 }
 
 model Skill {
@@ -180,4 +182,21 @@ model Endorsement {
   toUserId   Int
   from       User   @relation("EndorsementFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
   to         User   @relation("EndorsementTo", fields: [toUserId], references: [id], onDelete: Cascade)
+}
+
+// ── ML Recommendation Feedback ─────────────────────────────────────────
+// Stores accept/reject signals so the recommendation engine can learn
+// which teammate suggestions worked and improve future matches.
+model MlFeedback {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  recommendedId   Int
+  action          String   // "accept" | "reject"
+  context         String?  // optional: "recommend" | "team-gen"
+  createdAt       DateTime @default(now())
+  user            User     @relation("MlFeedbackUser", fields: [userId], references: [id], onDelete: Cascade)
+  recommendedUser User     @relation("MlFeedbackTarget", fields: [recommendedId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([recommendedId])
 }

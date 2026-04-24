@@ -1,121 +1,162 @@
-# HackTeam Platform - Production Backend Engine
+# Code Sathi Backend (TeamForge Context)
 
-A highly scalable, production-ready backend engine for the HackTeam platform. Built with a focus on clean architecture, security, and developer experience.
+Production-style Express backend powering authentication, profiles, teams, messaging, and ML recommendations for hackathon teammate formation.
 
-## 🚀 Tech Stack & Architecture
+## Stack
 
-- **Framework:** Node.js + Express.js (ES Modules)
-- **Database:** PostgreSQL (migrated from SQLite for production scale)
-- **ORM:** Prisma
-- **Validation:** Zod
-- **Documentation:** Swagger / OpenAPI
-- **Containerization:** Docker & Docker Compose
-- **Security:** Helmet, Express Rate Limit, bcryptjs, JSON Web Tokens (JWT)
+- Node.js + Express (ES Modules)
+- Prisma ORM
+- SQLite for local development (default)
+- JWT auth
+- Zod request validation
+- Swagger/OpenAPI docs
+- Helmet + rate-limiting + centralized error handling
 
-## 📁 Folder Structure
+## Backend Structure
 
 ```text
 backend/
 ├── src/
-│   ├── app.js               # Express application setup & middleware pipeline
-│   ├── server.js            # Entry point & DB connection
-│   ├── docs/                # Swagger OpenAPI specifications
-│   ├── lib/                 # Reusable utilities (Prisma client, logger)
-│   ├── middleware/          # Auth, error handling, rate limiting
-│   ├── modules/             # Business Logic & Domains
-│       ├── auth.js          # Auth routes & controllers
-│       ├── users.js         # User profiles operations
-│       ├── hackathons.js    # Hackathons & Team postings
-│       ├── teams.js         # Team management
-│       ├── messages.js      # Messaging system
-│       ├── notifications.js # System notifications
-│       └── showcase.js      # Project showcasing
+│   ├── app.js                 # app setup, middleware, routes, static frontend serving
+│   ├── server.js              # entrypoint
+│   ├── docs/swagger.js        # OpenAPI spec
+│   ├── lib/                   # prisma client, serializers, http helpers
+│   ├── middleware/            # auth + errors
+│   ├── modules/               # route modules
+│   │   ├── auth.js
+│   │   ├── users.js
+│   │   ├── hackathons.js
+│   │   ├── teams.js
+│   │   ├── messages.js
+│   │   ├── notifications.js
+│   │   ├── showcase.js
+│   │   └── ml.js
+│   └── ml-engine/             # recommendation engine internals
 ├── prisma/
-│   ├── schema.prisma        # PostgreSQL Database Models
-├── Dockerfile               # Production image configuration
-├── docker-compose.yml       # Postgres DB + App services
-└── package.json
+│   ├── schema.prisma
+│   ├── seed.js
+│   └── migrations/
+├── scripts/smoke.js
+├── Dockerfile
+└── docker-compose.yml
 ```
 
-## 🛠️ API Routes List
+## Run Locally
 
-Swagger Documentation is available locally at: `http://localhost:4010/api-docs`
+From `backend/`:
 
-**Core Endpoints:**
-- `GET /health` - API Health check (Unauthenticated)
-- `GET /api-docs` - Swagger UI
-
-**Authentication:**
-- `POST /api/auth/register` - Create an account
-- `POST /api/auth/login` - Authenticate & get JWT
-- `GET /api/auth/me` - Get current user profile
-
-**Users:**
-- `GET /api/users` - List / Filter users
-- `GET /api/users/:id` - Get user profile
-- `PATCH /api/users/me` - Update profile
-
-**Hackathons & Teams:**
-- `GET /api/hackathons` - List hackathons
-- `GET /api/hackathons/:id` - Hackathon details
-- `POST /api/hackathons/:id/toggle-going` - RSVP
-- `GET /api/teams` - List team posts
-- `POST /api/teams` - Create a team post
-- `POST /api/teams/:id/join` - Request to join a team
-
-**Interactions:**
-- `GET /api/messages/inbox` - Private messages
-- `GET /api/showcase` - Showcase projects
-- `GET /api/notifications` - User notifications
-
-## 🐳 Deployment Steps
-
-This application is ready to be deployed to any Docker-compatible hosting provider (Render, AWS ECS, DigitalOcean App Platform, Railway).
-
-**Step 1: Set up the Database**
-Deploy a managed PostgreSQL database (e.g., Supabase, Neon, or AWS RDS).
-Get your connection string and add it to `.env` as `DATABASE_URL`.
-
-**Step 2: Environment Variables**
-Configure the production `.env`:
-```text
-NODE_ENV=production
-DATABASE_URL="postgresql://user:password@host:port/database"
-JWT_SECRET="generate_a_very_strong_random_string"
-PORT=4010
-```
-
-**Step 3: Docker Deployment**
-Build and run the container:
 ```bash
-docker-compose build
-docker-compose up -d
+npm install
+npx prisma generate
+npx prisma migrate dev
+npm run dev
 ```
-*Alternatively, simply push to a platform like Render and specify the `Dockerfile` as the build source.*
 
-**Step 4: Run Migrations on Prod**
-Before standard traffic hits the deployed container, execute:
+Server runs on `PORT` (default `4010` from `.env`).
+
+## Local URLs
+
+- Health: `http://localhost:4010/health`
+- Swagger: `http://localhost:4010/api/docs`
+
+## Environment Variables
+
+Local default `.env`:
+
+```text
+PORT=4010
+JWT_SECRET=replace-with-a-strong-random-secret
+JWT_EXPIRES_IN=7d
+DATABASE_URL="file:./dev.db"
+```
+
+In production, set a secure `JWT_SECRET` and a production-grade `DATABASE_URL`.
+
+## API Surface
+
+### Core
+
+- `GET /health`
+- `GET /api/docs`
+
+### Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+### Users
+
+- `GET /api/users`
+- `GET /api/users/:id`
+- `PATCH /api/users/me`
+- `POST /api/users/:id/connect`
+
+### Hackathons + Teams
+
+- `GET /api/hackathons`
+- `GET /api/hackathons/:id`
+- `POST /api/hackathons/:id/toggle-going`
+- `GET /api/teams`
+- `POST /api/teams`
+- `POST /api/teams/:id/join`
+
+### Messages
+
+- `GET /api/messages/inbox`
+- `GET /api/messages/:id`
+- `POST /api/messages/:id/send`
+- `POST /api/messages/:id/accept`
+- `POST /api/messages/:id/decline`
+
+### Showcase + Notifications
+
+- `GET /api/showcase`
+- `GET /api/notifications`
+- `POST /api/notifications/:id/read`
+
+### ML Recommendation Engine
+
+- `POST /api/ml/recommend/:userId`
+  - returns ranked teammate matches with score, reasons, and role fit
+- `POST /api/ml/generate-team`
+  - input: `teamSize` (4 or 5), optional `theme`
+  - returns optimized teammate set and summary
+- `POST /api/ml/feedback`
+  - input: `userId`, `recommendedId`, `action` (`accept`/`reject`), optional context
+
+## How ML Scoring Works (Current)
+
+Hybrid weighted score using:
+
+- Skill overlap
+- Shared hackathon interests
+- Complementary roles
+- Experience blend
+- Prior collaboration signal
+- Candidate strength index
+- User feedback bias (accept/reject history)
+
+Cold-start users still receive recommendations from profile/skills/role/experience signals even without behavior history.
+
+## Useful Scripts
+
+- `npm run dev` - local development
+- `npm start` - start server
+- `npm run prisma:migrate` - migrate dev alias
+- `npm run prisma:seed` - seed database
+- `npm run smoke` - smoke checks
+
+## Data Safety Note (Dev)
+
+`prisma migrate reset` wipes local data. Back up `prisma/dev.db` before risky migration operations.
+
+## Docker Notes
+
+- `docker-compose.yml` includes PostgreSQL + app services for containerized runs.
+- Local non-docker default is SQLite.
+- If using Docker/Postgres, set production-grade secrets and run:
+
 ```bash
 npx prisma migrate deploy
 ```
-
-## 📈 Scaling to 10k+ Users
-
-To ensure this backend remains robust under traffic surges (like during hackathon submissions):
-
-1. **Database Connection Pooling:** 
-   We use Prisma. At scale, add **PgBouncer** or use Prisma's Accelerate connection pooler to avoid exhausting Postgres connections during high concurrency.
-2. **Horizontal Scaling:**
-   Because we use stateless JWT authentication, the Express app can be replicated instantly across multiple containers/nodes behind a Load Balancer. No sticky sessions are required!
-3. **Caching Layer:**
-   Currently, every request hits Postgres. For 10k+ users, implement Redis. Cache the `GET /api/hackathons` and `GET /api/showcase` routes since they are high-read, low-write operations.
-4. **Asynchronous Background Jobs:**
-   Offload intense tasks (like processing image uploads or sending bulk email notifications) to a worker queue using BullMQ or AWS SQS.
-5. **Database Indexes:**
-   The `schema.prisma` is modeled cleanly. Ensure indexes exist on frequently queried fields like `User.email` and foreign keys (e.g., `TeamMember.teamId`).
-
-## ✍️ Code Quality
-- All responses are wrapped in consistent JSON structures.
-- Helmet secures HTTP headers.
-- Rate limits protect against Brute Force attacks.
-- Centralized Error Handling prevents leaking stack traces in production.

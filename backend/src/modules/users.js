@@ -164,4 +164,54 @@ router.get('/:id', authOptional, asyncHandler(async (req, res) => {
   });
 }));
 
+router.post('/:id/connect', authRequired, asyncHandler(async (req, res) => {
+  const fromUserId = Number(req.auth.userId);
+  const toUserId = Number(req.params.id);
+
+  if (fromUserId === toUserId) {
+    throw new AppError(400, 'Cannot connect with yourself');
+  }
+
+  const [toUser, fromUser] = await Promise.all([
+    prisma.user.findUnique({ where: { id: toUserId } }),
+    prisma.user.findUnique({ where: { id: fromUserId } })
+  ]);
+
+  if (!toUser || !fromUser) throw new AppError(404, 'User not found');
+
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      OR: [
+        { fromUserId, toUserId },
+        { fromUserId: toUserId, toUserId: fromUserId }
+      ]
+    }
+  });
+
+  if (existing) {
+    throw new AppError(400, 'Connection request already sent or conversation exists');
+  }
+
+  const convo = await prisma.conversation.create({
+    data: {
+      type: 'request',
+      fromUserId,
+      toUserId,
+      requestStatus: 'pending',
+      requestMessage: "Hi, I'd like to connect and potentially team up!",
+    }
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: toUserId,
+      type: 'connection',
+      text: `${fromUser.name} sent you a connection request.`,
+      timeLabel: 'Just now'
+    }
+  });
+
+  res.status(201).json({ ok: true, conversation: convo });
+}));
+
 export default router;

@@ -129,6 +129,20 @@ router.post('/:id/send', authRequired, asyncHandler(async (req, res) => {
     data: { updatedAt: new Date() },
   });
 
+  const recipientId = convo.fromUserId === userId ? convo.toUserId : convo.fromUserId;
+  const sender = await prisma.user.findUnique({ where: { id: userId } });
+  
+  if (sender) {
+    await prisma.notification.create({
+      data: {
+        userId: recipientId,
+        type: 'message',
+        text: `New message from ${sender.name}`,
+        timeLabel: 'Just now'
+      }
+    });
+  }
+
   res.status(201).json({ message });
 }));
 

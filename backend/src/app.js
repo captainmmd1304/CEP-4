@@ -18,6 +18,7 @@ import teamsRouter from './modules/teams.js';
 import messagesRouter from './modules/messages.js';
 import showcaseRouter from './modules/showcase.js';
 import notificationsRouter from './modules/notifications.js';
+import mlRouter from './modules/ml.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 export function createApp() {
@@ -69,6 +70,7 @@ export function createApp() {
   app.use('/api/messages', messagesRouter);
   app.use('/api/showcase', showcaseRouter);
   app.use('/api/notifications', notificationsRouter);
+  app.use('/api/ml', mlRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,68 +1,137 @@
-# Code Sathi ⚡
+# Code Sathi (TeamForge Context) ⚡
 
-**Code Sathi** is a modern platform designed to help developers, designers, and innovators find their dream teammates for hackathons and collaborative projects. 
+Code Sathi is a full-stack hackathon collaboration platform. In your TeamForge context, this codebase now includes an integrated ML recommendation engine for teammate matching and team generation.
 
-## 🚀 Features
+## What This Project Includes
 
-- **Discover Projects**: Browse through a curated list of innovative projects looking for collaborators.
-- **Hackathon Directory**: Find upcoming hackathons and detail pages.
-- **Team Board**: Manage your team and communicate with potential members.
-- **Real-time Messages**: Connect directly with other "sathis" to discuss ideas.
-- **Project Showcase**: Exhibit your completed works to the community.
-- **Personalized Profiles**: Showcase your skills, experience, and interests.
+- Frontend: Vanilla HTML/CSS/JS single-page app in `frontend/`
+- Backend: Node.js + Express REST API in `backend/`
+- Database: Prisma ORM (SQLite by default for local dev)
+- Auth: JWT-based auth with protected API routes
+- ML module: teammate recommendation, team generation, and feedback learning
 
-## 🛠️ Tech Stack
-
-- **Frontend**: Vanilla HTML5, CSS3, JavaScript (ES6+)
-- **Design**: Modern Dark Theme with Glassmorphism and vibrant gradients.
-- **Architecture**: Single Page Application (SPA) structure.
-
-## 📂 Project Structure
+## Current Architecture
 
 ```text
 .
-├── backend/          # Node.js Express API
-├── frontend/         # Frontend assets (HTML, CSS, JS)
-├── README.md         # Documentation
-└── .gitignore        # Git ignore rules
+├── backend/
+│   ├── src/
+│   │   ├── modules/          # API route modules
+│   │   ├── ml-engine/        # ML recommendation engine
+│   │   ├── middleware/       # auth/error/rate-limit middleware
+│   │   ├── docs/             # Swagger spec
+│   │   └── app.js            # app wiring + routes + static frontend serving
+│   └── prisma/               # schema, migrations, seed
+├── frontend/                 # SPA pages, data, app router
+└── README.md
 ```
 
-## 📦 Getting Started
+## ML Engine Integration (Already Included)
 
-To run the project locally, follow these steps:
+The ML engine is part of backend runtime and does not need a separate process.
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/captainmmd1304/CEP-4.git
-cd CEP-4
-```
+- `backend/src/ml-engine/recommender.js`
+- `backend/src/ml-engine/team_builder.js`
+- `backend/src/ml-engine/feature_engineering.js`
+- `backend/src/ml-engine/feedback_learning.js`
+- `backend/src/ml-engine/model_loader.js`
+- `backend/src/ml-engine/train.js`
+- `backend/src/ml-engine/utils.js`
+- API routes in `backend/src/modules/ml.js`
+- detailed guide: `docs/ML_ENGINE.md`
 
-### 2. Backend Setup
-Navigate to the backend directory, install dependencies, and start the development server:
+### ML API Endpoints
+
+All are protected and use existing JWT middleware.
+
+- `POST /api/ml/recommend/:userId`
+- `POST /api/ml/generate-team`
+- `POST /api/ml/feedback`
+
+## Local Setup
+
+## 1) Backend
+
+From repo root:
 
 ```bash
 cd backend
-
-# Install dependencies
 npm install
-
-# Set up environment variables
-# Check if you need to create a .env file with appropriate database credentials
-
-# Run database migrations and seed data
-npm run prisma:migrate
-npm run prisma:seed
-
-# Start the development server
+npx prisma generate
+npx prisma migrate dev
 npm run dev
 ```
-The backend server should now be running locally.
 
-### 3. Frontend Setup
-The frontend is built with vanilla web technologies, so no complex build process is required:
-1. Navigate to the `frontend/` directory.
-2. Open `index.html` directly in your favorite web browser.
-   - *Alternatively, use a local server like the "Live Server" extension in VS Code for a better development experience.*
+Default backend port is `4010` via `backend/.env`.
 
----
-Built with ❤️ for the developer community.
+Health check:
+
+- `http://localhost:4010/health`
+
+Swagger docs:
+
+- `http://localhost:4010/api/docs`
+
+## 2) Frontend
+
+You have two options:
+
+- Option A: Use backend-served frontend (already wired in `backend/src/app.js`) by opening `http://localhost:4010`
+- Option B: Run frontend statically from `frontend/` (Live Server or any static server)
+
+If using static frontend separately, ensure API calls still target backend on `localhost:4010`.
+
+## Environment Variables (Backend)
+
+`backend/.env` expected values:
+
+```text
+PORT=4010
+JWT_SECRET=replace-with-a-strong-random-secret
+JWT_EXPIRES_IN=7d
+DATABASE_URL="file:./dev.db"
+```
+
+## Safe Database Workflow (Important)
+
+Use this before schema/migration changes to avoid losing testing accounts.
+
+1. Backup local SQLite DB:
+
+```bash
+cp "./prisma/dev.db" "./prisma/dev.backup.$(date +%Y%m%d-%H%M%S).db"
+```
+
+2. Apply migrations safely:
+
+```bash
+npx prisma generate
+npx prisma migrate dev
+```
+
+3. Do not run `prisma migrate reset` unless you intentionally want to wipe local data.
+
+## Commands Reference
+
+From `backend/`:
+
+- `npm run dev` - start dev server with nodemon
+- `npm start` - start server
+- `npm run prisma:migrate` - Prisma migrate dev (init script alias)
+- `npm run prisma:seed` - seed DB
+- `npm run smoke` - smoke test core APIs
+
+## Core Feature Areas
+
+- Authentication and profile management
+- User discovery and connect requests
+- Hackathon browsing and RSVP
+- Team postings and join flow
+- Inbox/messaging workflow
+- Notifications
+- Showcase/projects
+- ML teammate recommendations and team generation
+
+## Notes on Naming
+
+Codebase branding and runtime logs use "Code Sathi". TeamForge is the project context/use case for the skill-based team formation workflow and ML matching features.
